@@ -1,206 +1,207 @@
-// This is a demonstration on how to use an input device to trigger changes on your neo pixels.
-// You should wire a momentary push button to connect from ground to a digital IO pin.  When you
-// press the button it will change to a new pixel animation.  Note that you need to press the
-// button once to start the first animation!
+#include <FastLED.h>
 
-#include <Adafruit_NeoPixel.h>
+// Data pin for a single button operation
+//#define BUTTON_PIN 9 // Flora
+#define BUTTON_PIN 3 // Bike box
 
-#define BUTTON_PIN   4    // Digital IO pin connected to the button.  This will be
-// driven with a pull-up resistor so the switch should
-// pull the pin to ground momentarily.  On a high -> low
-// transition the button press logic will execute.
+// Data pin for the front LED strip
+#define DATA_PIN_F 6
+// Number of LEDs on the front LED strip
+#define NUM_LEDS_F 60
 
-#define PIXEL_PIN    17    // Digital IO pin connected to the NeoPixels.
-#define PIXEL_COUNT  10
+// Data pin(s) for the back LED strip(s)
+#define DATA_PIN_B1 5
+#define DATA_PIN_B2 4
+// Number of LEDs on the back LED strip(s)
+#define NUM_LEDS_B 22
 
-// Parameter 1 = number of pixels in strip,  neopixel stick has 8
-// Parameter 2 = pin number (most are valid)
-// Parameter 3 = pixel type flags, add together as needed:
-//   NEO_RGB     Pixels are wired for RGB bitstream
-//   NEO_GRB     Pixels are wired for GRB bitstream, correct for neopixel stick
-//   NEO_KHZ400  400 KHz bitstream (e.g. FLORA pixels)
-//   NEO_KHZ800  800 KHz bitstream (e.g. High Density LED strip), correct for neopixel stick
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXEL_COUNT, PIXEL_PIN, NEO_GRB + NEO_KHZ800);
-
-#define PIXEL_PIN1  5
-#define PIXEL_PIN2  6
-#define BACK_PIXEL_COUNT 22  
-
-Adafruit_NeoPixel strip1 = Adafruit_NeoPixel(BACK_PIXEL_COUNT, PIXEL_PIN1, NEO_GRB + NEO_KHZ800);
-Adafruit_NeoPixel strip2 = Adafruit_NeoPixel(BACK_PIXEL_COUNT, PIXEL_PIN2, NEO_GRB + NEO_KHZ800);
-
-bool oldState = HIGH;
-int showType = 1;
+CRGB front[NUM_LEDS_F];
+CRGB back1[NUM_LEDS_B];
+CRGB back2[NUM_LEDS_B];
 
 void setup() {
+  // Initialize the LED strips
+  FastLED.addLeds<NEOPIXEL, DATA_PIN_F>(front, NUM_LEDS_F);
+  FastLED.addLeds<NEOPIXEL, DATA_PIN_B1>(back1, NUM_LEDS_B);
+  FastLED.addLeds<NEOPIXEL, DATA_PIN_B2>(back2, NUM_LEDS_B);
+
+  // Initialize the button
   pinMode(BUTTON_PIN, INPUT_PULLUP);
-  strip.begin();
-  strip.show(); // Initialize all pixels to 'off'
+  digitalWrite(BUTTON_PIN, HIGH);
 }
 
-bool button() {
-  // Get current button state.
-  bool newState = digitalRead(BUTTON_PIN);
-  bool changedState = false;
 
-  // Check if state changed from high to low (button press).
-  if (newState == LOW && oldState == HIGH) {
-    // Short delay to debounce button.
-    delay(20);
-    // Check if button is still low after debounce.
-    newState = digitalRead(BUTTON_PIN);
-    if (newState == LOW) {
-      showType++;
-      changedState = true;
-      if (showType > 10)
-        showType = 0;
-    }
-  }
+int f_animation = 1;
+int b_animation = 1;
+int rainbow_color = 0;
+uint8_t gHue = 0;
+uint8_t cycle = 0;
 
-  // Set the last button state to the old state.
-  oldState = newState;
-
-  if (changedState == true)
-    return true;
-}
+#define NUM_F_ANIMATIONS 3
+#define NUM_B_ANIMATIONS 3
 
 void loop() {
-  startShow(showType);
-  button();
-}
-
-void startShow(int i) {
-  switch (i) {
-    case 0: colorWipe(strip.Color(0, 0, 0), 50);    // Black/off
-      while (true) {
-        for (i = 0; i < 100; i++) {
-          strip.setPixelColor(1, strip.Color(255, 0, 0));
-          delay(10);
-          if (button() == true)
-            break;
-        }
-        for (i = 0; i < 100; i++) {
-          strip.setPixelColor(1, strip.Color(0, 0, 0));
-          delay(10);
-          if (button() == true)
-            break;
-        }
-      }
-      break;
-    case 1: colorWipe(strip.Color(255, 0, 0), 50);  // Red
-      break;
-    case 2: colorWipe(strip.Color(0, 255, 0), 50);  // Green
-      break;
-    case 3: colorWipe(strip.Color(0, 0, 255), 50);  // Blue
-      break;
-    case 4: theaterChase(strip.Color(127, 127, 127), 50); // White
-      break;
-    case 5: theaterChase(strip.Color(127,   0,   0), 50); // Red
-      break;
-    case 6: theaterChase(strip.Color(127, 127,   0), 50); // Green
-      break;
-    case 7: theaterChase(strip.Color(  0,   0, 127), 50); // Blue
-      break;
-    case 8: rainbow(20);
-      break;
-    case 9: rainbowCycle(20);
-      break;
-    case 10: theaterChaseRainbow(50);
-      break;
+  EVERY_N_MILLISECONDS( 20 ) {
+    gHue++;  // slowly cycle the "base color" through the rainbow
   }
-}
-
-// Fill the dots one after the other with a color
-void colorWipe(uint32_t c, uint8_t wait) {
-  for (uint16_t i = 0; i < strip.numPixels(); i++) {
-    strip.setPixelColor(i, c);
-    if (button() == true)
-      return;
-    strip.show();
-    delay(wait);
-  }
-}
-
-void rainbow(uint8_t wait) {
-  uint16_t i, j;
-
-  for (j = 0; j < 256; j++) {
-    for (i = 0; i < strip.numPixels(); i++) {
-      strip.setPixelColor(i, Wheel((i + j) & 255));
+  EVERY_N_MILLISECONDS( 100 ) {
+    cycle++;
+    if (cycle == 3) {
+      cycle = 0;
     }
-    strip.show();
-    if (button() == true)
-      return;
-    delay(wait);
   }
+  // put your main code here, to run repeatedly:
+  switch (f_animation) {
+    case 1:
+      fill_rainbow(front, NUM_LEDS_F, gHue, 5);
+      break;
+    case 2:
+      theaterChase(front, NUM_LEDS_F, true);
+      break;
+    case 3:
+      theaterChase(front, NUM_LEDS_F, false);
+      break;
+    default:
+      fadeToBlackBy(front, NUM_LEDS_F, 5);
+      break;
+  }
+
+  switch (b_animation) {
+    case 1:
+      fill_rainbow(back1, NUM_LEDS_B, gHue, 5);
+      fill_rainbow(back2, NUM_LEDS_B, gHue, 5);
+      break;
+    case 2:
+      theaterChase(back1, NUM_LEDS_B, true);
+      theaterChase(back2, NUM_LEDS_B, true);
+      break;
+    case 3:
+      theaterChase(back1, NUM_LEDS_B, false);
+      theaterChase(back2, NUM_LEDS_B, false);
+      break;
+    default:
+      fadeToBlackBy(back1, NUM_LEDS_B, 5);
+      fadeToBlackBy(back2, NUM_LEDS_B, 5);
+      break;
+  }
+
+  FastLED.show();
+  buttons();
 }
 
-// Slightly different, this makes the rainbow equally distributed throughout
-void rainbowCycle(uint8_t wait) {
-  uint16_t i, j;
-
-  for (j = 0; j < 256; j++) {
-    for (i = 0; i < strip.numPixels(); i++) {
-      strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + j) & 255));
+void theaterChase(CRGB* leds, uint8_t num_leds, bool rainbow) {
+  for (int i = 0; i < num_leds; i = i + 3) {
+    if (i + cycle < num_leds) {
+      if (rainbow == true) {
+        leds[i + cycle] = CHSV(gHue + i, 255, 192);
+      } else {
+        leds[i + cycle] = CRGB::White;
+      }
     }
-    strip.show();
-    if (button() == true)
-      return;
-    delay(wait);
-  }
-}
-
-//Theatre-style crawling lights.
-void theaterChase(uint32_t c, uint8_t wait) {
-  for (int j = 0; j < 10; j++) { //do 10 cycles of chasing
-    for (int q = 0; q < 3; q++) {
-      for (int i = 0; i < strip.numPixels(); i = i + 3) {
-        strip.setPixelColor(i + q, c);  //turn every third pixel on
-      }
-      strip.show();
-      if (button() == true)
-        return;
-
-      delay(wait);
-
-      for (int i = 0; i < strip.numPixels(); i = i + 3) {
-        strip.setPixelColor(i + q, 0);      //turn every third pixel off
-      }
+    if (i + cycle - 1 >= 0 && i + cycle - 1 < num_leds ) {
+      leds[i + cycle - 1] = CRGB::Black;
+    }
+    if (i + cycle - 2 >= 0 && i + cycle - 2 < num_leds ) {
+      leds[i + cycle - 2] = CRGB::Black;
     }
   }
 }
 
-//Theatre-style crawling lights with rainbow effect
-void theaterChaseRainbow(uint8_t wait) {
-  for (int j = 0; j < 256; j++) {   // cycle all 256 colors in the wheel
-    for (int q = 0; q < 3; q++) {
-      for (int i = 0; i < strip.numPixels(); i = i + 3) {
-        strip.setPixelColor(i + q, Wheel( (i + j) % 255)); //turn every third pixel on
-      }
-      strip.show();
-      if (button() == true)
-        return;
+void buttons() {
+  int b = checkButton();
+  if (b == 1) {
+    f_animation++;
+    if (f_animation > NUM_F_ANIMATIONS)
+      f_animation = 1;
+  }
 
-      delay(wait);
+  if (b == 2) {
+    b_animation++;
+    if (b_animation > NUM_B_ANIMATIONS)
+      b_animation = 1;
+  }
 
-      for (int i = 0; i < strip.numPixels(); i = i + 3) {
-        strip.setPixelColor(i + q, 0);      //turn every third pixel off
-      }
-    }
+  if (b == 3 || b == 4) {
+    f_animation = 100;
+    b_animation = 100;
   }
 }
 
-// Input a value 0 to 255 to get a color value.
-// The colours are a transition r - g - b - back to r.
-uint32_t Wheel(byte WheelPos) {
-  WheelPos = 255 - WheelPos;
-  if (WheelPos < 85) {
-    return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+
+// Button timing variables
+int debounce = 20; // ms debounce period to prevent flickering when pressing or releasing the button
+int DCgap = 250; // max ms between clicks for a double click event
+int holdTime = 2000; // ms hold period: how long to wait for press+hold event
+int longHoldTime = 5000; // ms long hold period: how long to wait for press+hold event
+
+// Other button variables
+boolean buttonVal = HIGH; // value read from button
+boolean buttonLast = HIGH; // buffered value of the button's previous state
+boolean DCwaiting = false; // whether we're waiting for a double click (down)
+boolean DConUp = false; // whether to register a double click on next release, or whether to wait and click
+boolean singleOK = true; // whether it's OK to do a single click
+long downTime = -1; // time the button was pressed down
+long upTime = -1; // time the button was released
+boolean ignoreUp = false; // whether to ignore the button release because the click+hold was triggered
+boolean waitForUp = false; // when held, whether to wait for the up event
+boolean holdEventPast = false; // whether or not the hold event happened already
+boolean longHoldEventPast = false;// whether or not the long hold event happened already
+
+int checkButton()
+{
+  int event = 0;
+  // Read the state of the button
+  buttonVal = digitalRead(BUTTON_PIN);
+  // Button pressed down
+  if (buttonVal == LOW && buttonLast == HIGH && (millis() - upTime) > debounce) {
+    downTime = millis();
+    ignoreUp = false;
+    waitForUp = false;
+    singleOK = true;
+    holdEventPast = false;
+    longHoldEventPast = false;
+    if ((millis() - upTime) < DCgap && DConUp == false && DCwaiting == true) DConUp = true;
+    else DConUp = false;
+    DCwaiting = false;
   }
-  if (WheelPos < 170) {
-    WheelPos -= 85;
-    return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+  // Button released
+  else if (buttonVal == HIGH && buttonLast == LOW && (millis() - downTime) > debounce) {
+    if (not ignoreUp) {
+      upTime = millis();
+      if (DConUp == false) DCwaiting = true;
+      else {
+        event = 2;
+        DConUp = false;
+        DCwaiting = false;
+        singleOK = false;
+      }
+    }
   }
-  WheelPos -= 170;
-  return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
+  // Test for normal click event: DCgap expired
+  if ( buttonVal == HIGH && (millis() - upTime) >= DCgap && DCwaiting == true && DConUp == false && singleOK == true) {
+    event = 1;
+    DCwaiting = false;
+  }
+  // Test for hold
+  if (buttonVal == LOW && (millis() - downTime) >= holdTime) {
+    // Trigger "normal" hold
+    if (not holdEventPast) {
+      event = 3;
+      waitForUp = true;
+      ignoreUp = true;
+      DConUp = false;
+      DCwaiting = false;
+      //downTime = millis();
+      holdEventPast = true;
+    }
+    // Trigger "long" hold
+    if ((millis() - downTime) >= longHoldTime) {
+      if (not longHoldEventPast) {
+        event = 4;
+        longHoldEventPast = true;
+      }
+    }
+  }
+  buttonLast = buttonVal;
+  return event;
 }

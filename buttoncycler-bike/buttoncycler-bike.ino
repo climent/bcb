@@ -12,8 +12,17 @@
 // Data pin(s) for the back LED strip(s)
 #define DATA_PIN_B1 5
 #define DATA_PIN_B2 4
+
 // Number of LEDs on the back LED strip(s)
 #define NUM_LEDS_B 22
+
+// Uncomment MOTION_PIN to enable the vibration sensor
+//#define MOTION_PIN 10
+
+#ifdef
+#define SLEEP_TIME 2000   // Not-spinning time before sleep, in milliseconds
+#define BRIGHTNESS 192
+#endif
 
 CRGB front[NUM_LEDS_F];
 CRGB back1[NUM_LEDS_B];
@@ -28,14 +37,25 @@ void setup() {
   // Initialize the button
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   digitalWrite(BUTTON_PIN, HIGH);
-}
 
+#ifdef MOTION_PIN
+  pinMode(MOTION_PIN, INPUT_PULLUP);
+#endif
+
+}
 
 int f_animation = 1;
 int b_animation = 1;
-int rainbow_color = 0;
 uint8_t gHue = 0;
 uint8_t cycle = 0;
+
+#ifdef MOTION_PIN
+uint32_t prev   = 0L; // Used for sleep timing
+boolean blinker = true;
+uint8_t max_b   = 192;
+uint8_t min_b   = 10;
+uint8_t bright  = 192;
+#endif
 
 #define NUM_F_ANIMATIONS 3
 #define NUM_B_ANIMATIONS 3
@@ -50,6 +70,29 @@ void loop() {
       cycle = 0;
     }
   }
+
+#ifdef MOTION_PIN
+  uint32_t t = millis();               // Current time, milliseconds
+  EVERY_N_MILLISECONDS( 50 ) {
+    if ((t - prev) > SLEEP_TIME) {
+      if (bright > min_b) {
+        bright--;
+      }
+      FastLED.setBrightness(bright);
+    } else {
+      if (bright < max_b) {
+        bright++;
+        bright++;
+      }
+      FastLED.setBrightness(bright);
+    }
+  }
+
+  if (!digitalRead(MOTION_PIN)) {      // Vibration switch pulled down?
+    prev = t;                          // Yes, reset timer
+  }
+#endif
+
   // put your main code here, to run repeatedly:
   switch (f_animation) {
     case 1:

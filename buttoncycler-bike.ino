@@ -1,23 +1,37 @@
 #include <FastLED.h>
+// Our custom data type
+//#include "LEDStrip.h"
 
 // Data pin for a single button operation
 //#define BUTTON_PIN 9 // Flora
 #define BUTTON_PIN 3 // Bike box
 
 // Data pin for the front LED strip
+// This pin is shared between the Flora and the bike box
 #define DATA_PIN_F 6
 // Number of LEDs on the front LED strip
 #define NUM_LEDS_F 60
 
-// Data pin(s) for the back LED strip(s)
+// Data pin(s) for the two back LED strip(s)
+// These are not present in the Flora. No need to change them.
 #define DATA_PIN_B1 5
 #define DATA_PIN_B2 4
-// Number of LEDs on the back LED strip(s)
+// Number of LEDs on each of the back LED strip(s)
 #define NUM_LEDS_B 22
 
 CRGB front[NUM_LEDS_F];
 CRGB back1[NUM_LEDS_B];
 CRGB back2[NUM_LEDS_B];
+
+int f_animation = 1;
+int b_animation = 1;
+int rainbow_color = 0;
+uint8_t gHue = 0;
+uint8_t cycle = 0;
+
+enum {SteadyDim, GettingBrighter, GettingDimmerAgain};
+int  PixelState[NUM_LEDS_F];
+CRGB PixelColor[NUM_LEDS_F];
 
 void setup() {
   // Initialize the LED strips
@@ -28,17 +42,18 @@ void setup() {
   // Initialize the button
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   digitalWrite(BUTTON_PIN, HIGH);
+  memset(PixelState, sizeof(PixelState), SteadyDim); // initialize all the pixels to SteadyDim.
+  memset(PixelColor, sizeof(PixelColor), CRGB::Black); // initialize all the pixels to SteadyDim.
 }
 
+//typedef void (*SimplePatternList[])();
+//SimplePatternList gPatterns = { rainbow, rainbowWithGlitter, confetti, sinelon, juggle, bpm };
+//uint8_t gCurrentPatternNumber = 0; // Index number of which pattern is current
 
-int f_animation = 1;
-int b_animation = 1;
-int rainbow_color = 0;
-uint8_t gHue = 0;
-uint8_t cycle = 0;
-
-#define NUM_F_ANIMATIONS 3
+#define NUM_F_ANIMATIONS 6
 #define NUM_B_ANIMATIONS 3
+int Pattern = 1;
+int16_t fader = 1;
 
 void loop() {
   EVERY_N_MILLISECONDS( 20 ) {
@@ -54,12 +69,51 @@ void loop() {
   switch (f_animation) {
     case 1:
       fill_rainbow(front, NUM_LEDS_F, gHue, 5);
+      addGlitter(front, NUM_LEDS_F, 80);
       break;
     case 2:
       theaterChase(front, NUM_LEDS_F, true);
       break;
     case 3:
       theaterChase(front, NUM_LEDS_F, false);
+      break;
+    case 4:
+      TwinkleMapPixels(front, NUM_LEDS_F, true);
+      break;
+    case 5:
+      TwinkleMapPixels(front, NUM_LEDS_F, false);
+      break;
+    case 6:
+      bpm(front, NUM_LEDS_F);
+      break;
+    case 50:
+      EVERY_N_SECONDS( 20 ) {
+        Pattern++;  // change patterns periodically
+        if (Pattern > 3) {
+          Pattern = 1;
+        }
+      }
+      switch (Pattern) {
+        case 1:
+          fill_rainbow(front, NUM_LEDS_F, gHue, 5);
+          break;
+        case 2:
+          fill_rainbow(front, NUM_LEDS_F, gHue, 5);
+          addGlitter(front, NUM_LEDS_F, 80);
+          fader = 1;
+          break;
+        case 3:
+          EVERY_N_MILLISECONDS(40) {
+            fader++;
+            if (fader > 255) {
+              fader = 255;
+            }
+          }
+          fill_rainbow(front, NUM_LEDS_F, gHue, 5);
+          fadeToBlackBy(front, NUM_LEDS_F, fader);
+          addGlitter(front, NUM_LEDS_F, 80);
+          break;
+      }
       break;
     default:
       fadeToBlackBy(front, NUM_LEDS_F, 5);
@@ -89,7 +143,68 @@ void loop() {
   buttons();
 }
 
+void bpm(CRGB* leds, uint8_t num_leds)
+{
+  // colored stripes pulsing at a defined Beats-Per-Minute (BPM)
+  uint8_t BeatsPerMinute = 62;
+  CRGBPalette16 palette = PartyColors_p;
+  uint8_t beat = beatsin8( BeatsPerMinute, 64, 255);
+  for ( int i = 0; i < num_leds; i++) { //9948
+    leds[i] = ColorFromPalette(palette, gHue + (i * 2), beat - gHue + (i * 10));
+  }
+}
+
+
+void addGlitter(CRGB* leds, uint8_t num_leds, fract8 chanceOfGlitter)
+{
+  if ( random8() < chanceOfGlitter) {
+    leds[random16(num_leds)] += CRGB::White;
+  }
+}
+
+void TwinkleMapPixels(CRGB* leds, uint8_t num_leds, bool white) {
+  //  fadeToBlackBy( leds, num_leds, 20);
+  random16_add_entropy(random());
+  for ( uint16_t i = 0; i < num_leds; i++) {
+    if ( PixelState[i] == SteadyDim) {
+      // this pixels is currently: SteadyDim
+      // so we randomly consider making it start getting brighter
+      if ( random16(0, 200) < 1) {
+        PixelState[i] = GettingBrighter;
+        if (white) {
+          PixelColor[i] = CRGB(4, 4, 4);
+        } else {
+          PixelColor[i] = CRGB(random16(0, 4), random16(0, 4), random16(0, 4));
+        }
+      }
+
+    } else if ( PixelState[i] == GettingBrighter ) {
+      // this pixels is currently: GettingBrighter
+      // so if it's at peak color, switch it to getting dimmer again
+      if ( leds[i].red >= 100 || leds[i].green >= 100 || leds[i].blue >= 100 ) {
+        PixelState[i] = GettingDimmerAgain;
+      } else {
+        // otherwise, just keep brightening it:
+        leds[i] += PixelColor[i];
+      }
+
+    } else { // getting dimmer again
+      // this pixels is currently: GettingDimmerAgain
+      // so if it's back to base color, switch it to steady dim
+      if ( leds[i] <= CRGB(0, 0, 0) ) {
+        leds[i] = CRGB(0, 0, 0); // reset to exact base color, in case we overshot
+        PixelState[i] = SteadyDim;
+      } else {
+        // otherwise, just keep dimming it down:
+        leds[i] -= CRGB(2, 2, 2);
+      }
+    }
+  }
+}
+
 void theaterChase(CRGB* leds, uint8_t num_leds, bool rainbow) {
+  //  fill_solid( leds, num_leds, CRGB::Black);
+  fadeToBlackBy( leds, num_leds, 50);
   for (int i = 0; i < num_leds; i = i + 3) {
     if (i + cycle < num_leds) {
       if (rainbow == true) {
@@ -97,12 +212,6 @@ void theaterChase(CRGB* leds, uint8_t num_leds, bool rainbow) {
       } else {
         leds[i + cycle] = CRGB::White;
       }
-    }
-    if (i + cycle - 1 >= 0 && i + cycle - 1 < num_leds ) {
-      leds[i + cycle - 1] = CRGB::Black;
-    }
-    if (i + cycle - 2 >= 0 && i + cycle - 2 < num_leds ) {
-      leds[i + cycle - 2] = CRGB::Black;
     }
   }
 }
@@ -120,8 +229,11 @@ void buttons() {
     if (b_animation > NUM_B_ANIMATIONS)
       b_animation = 1;
   }
-
-  if (b == 3 || b == 4) {
+  if (b == 3) {
+    f_animation = 50;
+    b_animation = 50;
+  }
+  if (b == 4) {
     f_animation = 100;
     b_animation = 100;
   }

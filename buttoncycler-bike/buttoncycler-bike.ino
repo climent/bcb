@@ -16,27 +16,14 @@
 // These are not present in the Flora. No need to change them.
 #define DATA_PIN_B1 5
 #define DATA_PIN_B2 4
-<<<<<<< HEAD:buttoncycler-bike.ino
 // Number of LEDs on each of the back LED strip(s)
-=======
-
-// Number of LEDs on the back LED strip(s)
->>>>>>> 3ee6294c01550ee7bac9641c66900fab239c558d:buttoncycler-bike/buttoncycler-bike.ino
 #define NUM_LEDS_B 22
-
-// Uncomment MOTION_PIN to enable the vibration sensor
-//#define MOTION_PIN 10
-
-#ifdef
-#define SLEEP_TIME 2000   // Not-spinning time before sleep, in milliseconds
-#define BRIGHTNESS 192
-#endif
 
 CRGB front[NUM_LEDS_F];
 CRGB back1[NUM_LEDS_B];
 CRGB back2[NUM_LEDS_B];
 
-int f_animation = 1;
+int f_animation = 50;
 int b_animation = 1;
 int rainbow_color = 0;
 uint8_t gHue = 0;
@@ -55,7 +42,6 @@ void setup() {
   // Initialize the button
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   digitalWrite(BUTTON_PIN, HIGH);
-<<<<<<< HEAD:buttoncycler-bike.ino
   memset(PixelState, sizeof(PixelState), SteadyDim); // initialize all the pixels to SteadyDim.
   memset(PixelColor, sizeof(PixelColor), CRGB::Black); // initialize all the pixels to SteadyDim.
 }
@@ -64,33 +50,15 @@ void setup() {
 //SimplePatternList gPatterns = { rainbow, rainbowWithGlitter, confetti, sinelon, juggle, bpm };
 //uint8_t gCurrentPatternNumber = 0; // Index number of which pattern is current
 
+unsigned long start_time;
+unsigned long now;
+
 #define NUM_F_ANIMATIONS 6
-=======
-
-#ifdef MOTION_PIN
-  pinMode(MOTION_PIN, INPUT_PULLUP);
-#endif
-
-}
-
-int f_animation = 1;
-int b_animation = 1;
-uint8_t gHue = 0;
-uint8_t cycle = 0;
-
-#ifdef MOTION_PIN
-uint32_t prev   = 0L; // Used for sleep timing
-boolean blinker = true;
-uint8_t max_b   = 192;
-uint8_t min_b   = 10;
-uint8_t bright  = 192;
-#endif
-
-#define NUM_F_ANIMATIONS 3
->>>>>>> 3ee6294c01550ee7bac9641c66900fab239c558d:buttoncycler-bike/buttoncycler-bike.ino
 #define NUM_B_ANIMATIONS 3
-int Pattern = 1;
-int16_t fader = 1;
+int pattern = 0;
+uint16_t led_count;
+uint16_t fader;
+uint8_t glitter;
 
 void loop() {
   EVERY_N_MILLISECONDS( 20 ) {
@@ -102,29 +70,6 @@ void loop() {
       cycle = 0;
     }
   }
-
-#ifdef MOTION_PIN
-  uint32_t t = millis();               // Current time, milliseconds
-  EVERY_N_MILLISECONDS( 50 ) {
-    if ((t - prev) > SLEEP_TIME) {
-      if (bright > min_b) {
-        bright--;
-      }
-      FastLED.setBrightness(bright);
-    } else {
-      if (bright < max_b) {
-        bright++;
-        bright++;
-      }
-      FastLED.setBrightness(bright);
-    }
-  }
-
-  if (!digitalRead(MOTION_PIN)) {      // Vibration switch pulled down?
-    prev = t;                          // Yes, reset timer
-  }
-#endif
-
   // put your main code here, to run repeatedly:
   switch (f_animation) {
     case 1:
@@ -147,33 +92,109 @@ void loop() {
       bpm(front, NUM_LEDS_F);
       break;
     case 50:
-      EVERY_N_SECONDS( 20 ) {
-        Pattern++;  // change patterns periodically
-        if (Pattern > 3) {
-          Pattern = 1;
-        }
-      }
-      switch (Pattern) {
+      switch (pattern) {
+        case 0:
+//          start_time = millis();
+          led_count = 0;
+          pattern++;
+          break;
         case 1:
-          fill_rainbow(front, NUM_LEDS_F, gHue, 5);
-          break;
-        case 2:
-          fill_rainbow(front, NUM_LEDS_F, gHue, 5);
-          addGlitter(front, NUM_LEDS_F, 80);
-          fader = 1;
-          break;
-        case 3:
-          EVERY_N_MILLISECONDS(40) {
-            fader++;
-            if (fader > 255) {
-              fader = 255;
+          EVERY_N_MILLISECONDS(50) {
+            if (led_count < NUM_LEDS_F) {
+              led_count++;
             }
           }
+          if (led_count == NUM_LEDS_F - 1) {
+            start_time = millis();
+          }
+          fill_rainbow(front, led_count, gHue, 5);
+          now = millis();
+          glitter = 1;
+          if (now - start_time > 2000 && led_count == NUM_LEDS_F) {
+            pattern++;
+          }
+          break;
+        case 2:
+          EVERY_N_MILLISECONDS(20) {
+            if (glitter < 100) {
+              glitter++;
+            }
+          }
+          now = millis();
+          fill_rainbow(front, NUM_LEDS_F, gHue, 5);
+          addGlitter(front, NUM_LEDS_F, glitter);
+          fader = 1;
+          if (glitter == 99) {
+            start_time = millis();
+          }
+          if (now - start_time > 1000 && glitter == 100) {
+            fader = 0;
+            pattern++;
+          }
+          break;
+        case 3:
+          EVERY_N_MILLISECONDS(4) {
+            if (fader < 255) {
+              fader++;
+            }
+          }
+          if (fader == 254) {
+            start_time = millis();
+          }
+          now = millis();
           fill_rainbow(front, NUM_LEDS_F, gHue, 5);
           fadeToBlackBy(front, NUM_LEDS_F, fader);
-          addGlitter(front, NUM_LEDS_F, 80);
+          addGlitter(front, NUM_LEDS_F, glitter);
+          if (now - start_time > 1000 && fader == 255) {
+            pattern++;
+          }
+          break;
+        case 4:
+          EVERY_N_MILLISECONDS(10) {
+            if (fader > 0 ) {
+              fader--;
+            }
+          }
+          if (fader != 0) {
+            fadeToBlackBy(front, NUM_LEDS_F, fader);
+          }
+          if (fader == 1) {
+            start_time = millis();
+          }
+          addGlitter(front, NUM_LEDS_F, glitter);
+          now = millis();
+          if (allColor(front, NUM_LEDS_F, CRGB::White) && fader == 0) {
+            start_time = millis();
+            pattern++;
+          }
+          break;
+        case 5:
+          now = millis();
+          fadeToBlackBy(front, NUM_LEDS_F, 1);
+          if (allColor(front, NUM_LEDS_F, CRGB::Black)) {
+            start_time = millis();
+            led_count = 0;
+            pattern++;
+          }
+          break;
+        case 6:
+          EVERY_N_MILLISECONDS(50) {
+            if (led_count < NUM_LEDS_F) {
+              led_count++;
+            }
+          }
+          bpm(front, led_count);
           break;
       }
+      break;
+    case 51:
+      fadeToBlackBy(front, NUM_LEDS_F, 192);
+      //      if (allBlack(front, NUM_LEDS_F) == true) {
+      //        f_animation++;
+      //      }
+      break;
+    case 53:
+      //      runningTheaterChase(front, NUM_LEDS_F, true);
       break;
     default:
       fadeToBlackBy(front, NUM_LEDS_F, 5);
@@ -209,14 +230,21 @@ void bpm(CRGB* leds, uint8_t num_leds)
   uint8_t BeatsPerMinute = 62;
   CRGBPalette16 palette = PartyColors_p;
   uint8_t beat = beatsin8( BeatsPerMinute, 64, 255);
-  for ( int i = 0; i < num_leds; i++) { //9948
+  for ( int i = 0; i < num_leds; i++) {
     leds[i] = ColorFromPalette(palette, gHue + (i * 2), beat - gHue + (i * 10));
   }
 }
 
+bool allColor(CRGB* leds, uint8_t num_leds, CRGB color) {
+  for (int i = 0; i < num_leds; i++) {
+    if (leds[i] != color) {
+      return false;
+    }
+  }
+  return true;
+}
 
-void addGlitter(CRGB* leds, uint8_t num_leds, fract8 chanceOfGlitter)
-{
+void addGlitter(CRGB* leds, uint8_t num_leds, fract8 chanceOfGlitter) {
   if ( random8() < chanceOfGlitter) {
     leds[random16(num_leds)] += CRGB::White;
   }
@@ -257,6 +285,19 @@ void TwinkleMapPixels(CRGB* leds, uint8_t num_leds, bool white) {
       } else {
         // otherwise, just keep dimming it down:
         leds[i] -= CRGB(2, 2, 2);
+      }
+    }
+  }
+}
+
+void runningTheaterChase(CRGB* leds, uint8_t num_leds, bool rainbow) {
+  fadeToBlackBy( leds, num_leds, 50);
+  for (int i = 0; i < num_leds; i = i + 3) {
+    if (i + cycle < num_leds) {
+      if (rainbow == true) {
+        leds[i + cycle] = CHSV(gHue + i, 255, 192);
+      } else {
+        leds[i + cycle] = CRGB::White;
       }
     }
   }

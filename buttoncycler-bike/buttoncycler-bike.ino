@@ -94,7 +94,6 @@ void loop() {
     case 50:
       switch (pattern) {
         case 0:
-//          start_time = millis();
           led_count = 0;
           pattern++;
           break;
@@ -109,8 +108,8 @@ void loop() {
           }
           fill_rainbow(front, led_count, gHue, 5);
           now = millis();
-          glitter = 1;
           if (now - start_time > 2000 && led_count == NUM_LEDS_F) {
+            glitter = 1;
             pattern++;
           }
           break;
